@@ -1,0 +1,268 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link href="js/base/base.css" rel="stylesheet">
+    <link href="js/base/bootstrap.css" rel="stylesheet">
+    <script type="text/javascript" src="js/base/jquery.min.js"></script>
+    <script src="js/base/bootstrap.js"></script>
+    <script src="js/base/template.js"></script>
+    <script src="js/base/template.dateformat.js"></script>
+    <!--流程js-->
+    <script src="js/jquery-ui.js"></script>
+    <script src="js/jquery.jsplumb.js"></script>
+    <!--初始有数据画线在引入-->
+    <script src="js/graphlib.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/operation.js"></script>
+    <style>
+        #diagramContainer {
+            padding: 20px;
+            width: 100%;
+            height: 600px;
+            border: 1px solid gray;
+        }
+        .item {
+            height: 80px;
+            width: 80px;
+            border: 1px solid blue;
+            position: absolute;
+        }
+    </style>
+</head>
+<body>
+<style>
+    .userdiv{
+        position: absolute;
+        padding:10px 5px;
+        min-height: 60px;
+        min-width: 100px;
+        background-color: #fff;
+        border:1px solid #333;
+        border-radius:6px;
+    }
+    .delete-node{
+        position: absolute;
+        top:0;
+        right:0;
+    }
+    .edit-node{
+        position: absolute;
+        font-size:12px;
+        top:0;
+        right:16px;
+        padding: 6px;
+        background-color: #fff;
+    }
+    .edit-node:hover,.delete-node:hover{
+        color:red;
+    }
+    .userNotes{
+        font-size: 12px;
+        padding: 6px 0;
+        line-height: 24px;
+        font-weight: bold;
+    }
+</style>
+<!-- <button class="glyphicon glyphicon-pencil edit-node" onclick="edituser('{{id}}')"></button>-->
+<script id="tpl-audio" type="text/html">
+    <div class='userdiv' id='{{id}}' style='top:{{top}}px;left:{{left}}px' modalType="audio"
+         data-nextnode="{{nextnode}}"
+    >
+        <button type="button" class="close delete-node pull-right" data-type="deleteNode" data-id="{{id}}">&times;</button>
+        <span class="userName">{{usemesg.name}}</span>
+        <p class="userNotes">{{usemesg.userNotes}}</p>
+    </div>
+</script>
+<div class="modal fade" id="addProcessModal" tabindex="-1" role="dialog" aria-labelledby="addProcessModal"
+     aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div id="addContent"></div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal -->
+</div>
+<div class="container-fluid" >
+    <div class="row">
+        <div id="side-buttons" class="bg-info">
+            <div class="clearfix">
+                <a class="btn btn-success btn-controler" href="javascript:;" data-template="tpl-audio" role="button">
+                   拖拽生成用户节点
+                </a>
+                <button class="btn btn-xs btn-danger" onclick="saveLine()">保存</button>
+            </div>
+        </div>
+        <div class="bg-success" id="diagramContainer">
+<!--            <div class="userdiv ui-draggable ui-draggable-handle _jsPlumb_endpoint_anchor" id="743_0" style="top:141.33333587646484px;left:86px">-->
+<!--                <button type="button" class="close delete-node pull-right" data-type="deleteNode" data-id="743_0">×</button>-->
+<!--                <button class="glyphicon glyphicon-pencil edit-node"></button>-->
+<!--                <span>xx</span>-->
+<!--                <p class="userNotes"></p>-->
+<!--            </div>-->
+        </div>
+    </div>
+</div>
+<script id="add_userMessage" type="text/html">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h4 class="modal-title" id="userLabel">新增</h4>
+    </div>
+    <div class="modal-body">
+        {{if selectid && selectid!=''}}
+        <input type="text" name="editid" value="{{selectid}}" type="hidden">
+        {{/if}}
+        <div class="input-group">
+            <span class="input-group-addon"> 选择人员 </span>
+            <select name="userdata" id="" class="form-control">
+                {{each userdata as item index}}
+                    {{if selectid && selectid==item.id}}
+                    <option value="{{item.id}}" data-name="{{item.realname}}" selected>{{item.realname}}</option>
+                    {{else}}
+                    <option value="{{item.id}}" data-name="{{item.realname}}">{{item.realname}}</option>
+                    {{/if}}
+                {{/each}}
+            </select>
+        </div>
+        <div class="input-group">
+            <span class="input-group-addon"> 描述 </span>
+            <input type="text" name="userNotes" class="form-control">
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-default"
+                data-dismiss="modal">取消
+        </button>
+        <button type="button" class="btn btn-primary"
+                onclick="addUserMesg()">确定
+        </button>
+    </div>
+</script>
+<script>
+    $(function () {
+        jsPlumbRun('#diagramContainer');
+    })
+    /*执行方法*/
+    var addUi;
+    function jsPlumbRun(demo) {
+        areaId = demo;
+        jsPlumb.setContainer(areaId);
+        /*左侧按钮调用拖拽方法*/
+        $('.btn-controler').draggable({
+            helper: 'clone',
+            scope: 'ss'
+        });
+        $(demo).droppable({
+            scope: 'ss',
+            drop: function (event, ui) {
+                /*弹出选择用户*/
+                addUi=ui;
+                addPersonal()
+            }
+        });
+        /*点击删除事件*/
+        $(areaId).on('click', function (event) {
+            event.stopPropagation();
+            event.preventDefault();
+            eventHandler(event.target.dataset);
+        });
+        // 当链接建立
+        jsPlumb.bind('beforeDrop', function (info) {
+            return connectionBeforeDropCheck(info)
+        });
+        // 单点击了连接线上的X号
+        jsPlumb.bind('dblclick', function (conn, originalEvent) {
+            DataDraw.deleteLine(conn)
+        });
+        //数据加载完成执行
+        DataDraw.draw(datanote.nodeList);
+    }
+    var fdyuser={"data":[
+            {"id":1,"realname":"小王"},
+            {"id":2,"realname":"小韩"},
+            {"id":3,"realname":"小李"},
+            {"id":4,"realname":"小赵"},
+            {"id":5,"realname":"小马"},
+            {"id":6,"realname":"小虎"},
+            {"id":7,"realname":"小七"},
+            {"id":8,"realname":"小六"},
+            {"id":9,"realname":"小伟"},
+            {"id":10,"realname":"笑场"},
+            {"id":11,"realname":"小九"},
+        ],"success":true,"message":"ok","code":0};
+    /*新增人员*/
+    function addPersonal() {
+        $('#addProcessModal').modal('show');
+        var userMessage=template('add_userMessage',{userdata:fdyuser.data || []});
+        $('#addContent').empty().append(userMessage);
+    }
+    /*选择人员后执行的方法*/
+    function addUserMesg() {
+        var obj={};
+        obj.id=$('[name="userdata"] option:selected').val()+'_'+$('.userdiv').length;
+        obj.name=$('[name="userdata"] option:selected').attr('data-name');
+        obj.userNotes=$.trim($('[name="userNotes"]').val());
+        dropNode(addUi.draggable[0].dataset.template, addUi.position,obj);
+        $('#addProcessModal').modal('hide');
+    }
+</script>
+<script>
+    /*保存当前节点*/
+    var savedata= {nodeList:[]};
+    function saveLine() {
+        var datalist=$(areaId).find('.userdiv');
+        for (var i = 0; i <datalist.length ; i++) {
+           var obj={};
+           var item = datalist.eq(i);
+           var nextnode=$(item).attr('data-nextnode') || '';
+           if(nextnode!==""){
+               obj.nextnode=nextnode.split(',');
+           }
+            obj.top=parseInt($(item).css('top'));
+            obj.left=parseInt($(item).css('left'));
+            obj.id=$(item).attr('id');
+            obj.userName=$(item).find('.userName').text();
+            obj.userNotes=$(item).find('.userNotes').text();
+            obj.type=$(item).attr('modalType');
+            savedata.nodeList.push(obj);
+        }
+    }
+    var datanote={
+        "nodeList": [
+            {
+                "nextnode": [
+                    "5_1",
+                    "1_2"
+                ],
+                "top": 173,
+                "left": 71,
+                "id": "1_0",
+                "userName": "小王",
+                "userNotes": "tijao",
+                "type": "audio"
+            },
+            {
+                "top": 120,
+                "left": 274,
+                "id": "5_1",
+                "userName": "小马",
+                "userNotes": "12313",
+                "type": "audio"
+            },
+            {
+                "top": 278,
+                "left": 309,
+                "id": "1_2",
+                "userName": "小王",
+                "userNotes": "",
+                "type": "audio"
+            }
+        ]
+    }
+</script>
+</body>
+
+</html>
